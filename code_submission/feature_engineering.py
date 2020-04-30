@@ -83,6 +83,8 @@ class Feature_Engineering:
     @timeit
     def _get_mf_feature(self, data, size=32):
         adj = csr_matrix((data.edge_weight, (data.edge_index[:, 0], data.edge_index[:,1])), shape = (self.num_nodes,self.num_nodes))
+        if np.max(adj - adj.T) > 1e-5:
+            adj = adj + adj.T 
         mf = MatrixFactorization()
         return mf.forward(adj, size)
 
