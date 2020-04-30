@@ -110,7 +110,11 @@ class Feature_Engineering:
         elif seclection_type == 'dgl':
             K = 200
             dgl = DeepGL(data)
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=gbdt_gen)
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=gbdt_gen,timebudget=None)
+            ### add
+            data=setx(data,rx)
+            rx=gbdt_gen(data,fixlen=2000)
+            ### 
         print('after selection, feature: {}->{}'.format(data.x.shape[1], rx.shape[1]))
         return rx
 

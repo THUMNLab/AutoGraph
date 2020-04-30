@@ -4,3 +4,5 @@ a.log
 logs/
 scoring_output/
 sample_result_submission/
+/**/__pycache__
+/**/.ipynb_checkpoints
