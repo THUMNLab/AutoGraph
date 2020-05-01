@@ -547,7 +547,24 @@ import random
 from tabulate import tabulate
 import copy
 from utils import setx
-    
+
+class Timer:
+    def __init__(self,timebudget=None):
+        self._timebudget=timebudget
+        self._esti_time=0
+        self._g_start=time.time()
+    def start(self):
+        self._start=time.time()
+    def end(self):
+        time_use=time.time()-self._start
+        self._esti_time=(self._esti_time+time_use)/2
+    def is_timeout(self):
+        timebudget=self._timebudget
+        if timebudget:
+            timebudget=self._timebudget-(time.time()-self._g_start)
+            if timebudget<self._esti_time:
+                return True
+        return False
 class DeepGL:
     r"""
     reference to
@@ -585,23 +602,26 @@ class DeepGL:
         fsel_idxs=[random.choice(cc) for cc in ccs]
         return x[fsel_idxs].T
     @timeit
-    def gen(self,max_epoch=3,fixlen=200,y_sel_func=gbdt_gen):
+    def gen(self,max_epoch=3,fixlen=200,y_sel_func=gbdt_gen,timebudget=None):
         x=self._x.copy()
         gx=x.copy()
         verbs=[]
         data=self._data
+        soft_timer=Timer(timebudget)
         for epoch in tqdm(range(max_epoch)):
+            soft_timer.start()
             verb=[epoch,gx.shape[1]]
             gx=self._gen(gx)
             gx=scale(gx)
             verb.append(gx.shape[1])
-            gx=self._sel(gx)
             data = setx(data, gx)
             gx=y_sel_func(data,fixlen=fixlen)
             verb.append(gx.shape[1])   
             x=np.concatenate([x,gx],axis=1)
             verbs.append(verb)
-            
+            soft_timer.end()
+            if soft_timer.is_timeout():
+                break
         print(tabulate(verbs,headers='epoch origin after-gen after-sel'.split()))
         return x
 
