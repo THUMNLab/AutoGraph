@@ -1,5 +1,6 @@
 import numpy as np
 from hyperopt import STATUS_OK, Trials, hp, space_eval, tpe, fmin
+from hyperopt.fmin import generate_trials_to_calculate
 from hyperopt.pyll import scope
 import time
 from sklearn.metrics import accuracy_score
@@ -43,7 +44,7 @@ class AutoGCN:
             pt += time.time()-st
         return sum(preds).max(1)[1].cpu().numpy().flatten()
 
-    def hyper_optimization(self, params, train_mask, val_mask):
+    def hyper_optimization(self, params, train_mask, val_mask, trials=None):
         space = {
                 'num_layers': hp.choice('num_layers', [1, 2]), 
                 'hidden': scope.int(hp.qloguniform('hidden', np.log(4), np.log(128), 1)),
@@ -52,13 +53,21 @@ class AutoGCN:
                 'epoches': scope.int(hp.quniform('epoches', 100, 200, 20)),
                 'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-2))
                 }
+        points = [{
+                'num_layers': 1, #### warning!!!: 这里的1是上面hp.choice的数组下标。不是值。。
+                'hidden': 32,
+                'dropout': 0.5,
+                'lr': 0.025,
+                'epoches': 200,
+                'weight_decay': 5e-3,
+                },]
         def objective(hyperparams):
             model = GCN(**{**params, **hyperparams}).to(self.device)
             pred = model.train_predict(self.data, train_mask, val_mask, **hyperparams).max(1)[1]
             score = accuracy_score(self.data.y[val_mask].cpu().numpy(), pred.cpu().numpy())
             return {'loss': -score, 'status': STATUS_OK}
 
-        trials = Trials()
+        trials = generate_trials_to_calculate(points)
         best = fmin(fn=objective, space=space, trials=trials,
                     algo=tpe.suggest, max_evals=5, verbose=1,
                     )

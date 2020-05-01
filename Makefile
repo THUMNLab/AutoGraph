@@ -6,6 +6,7 @@ log_file = $(log_dir)/logs_$(log_prefix).txt
 
 datasets = a b c d e
 dirs:=$(shell ls data/ )
+gpuid:=$(shell gpustat | awk '{print NR, $$11}' | sort -k 2 | awk '{print $$1}' | sed -n '2p')
 
 run:
 	python run_local_test.py --dataset_dir=data/$(dataset) --code_dir=code_submission
@@ -29,3 +30,5 @@ total_all:
 		make run dataset=$$d; \
 		cat scoring_output/scores.txt >> $(score_file); \
 	done
+docker:
+	docker run --gpus=0 -it --rm -v "$$(pwd):/app/autograph" -w /app/autograph -e NVIDIA_VISIBLE_DEVICES=$(gpuid) nehzux/kddcup2020:v2
