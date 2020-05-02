@@ -4,10 +4,11 @@ from hyperopt.fmin import generate_trials_to_calculate
 from hyperopt.pyll import scope
 import time
 from sklearn.metrics import accuracy_score
+import torch.nn.functional as F
 import lightgbm as lgb
 
 from layer import GCN
-from utils import train_val_split
+from utils import train_val_split, softmax
 
 class AutoGCN:
     def __init__(self, data, device, start_time, time_budget, n_class, train_ind):
@@ -24,6 +25,7 @@ class AutoGCN:
                 'num_class': self.n_class
                 }
         preds = []
+        scores = []
         pt = 0
         for i in range(5):
             st = time.time()
@@ -35,14 +37,15 @@ class AutoGCN:
             train_mask = train_mask.to(self.device)
             val_mask = val_mask.to(self.device)
 
-            hyperparams = self.hyper_optimization(params, train_mask, val_mask)
+            hyperparams, score = self.hyper_optimization(params, train_mask, val_mask)
             hyperparams['epoches'] = 3*hyperparams['epoches']
 
             self.model = GCN(**{**params, **hyperparams}).to(self.device)
             pred = self.model.train_predict(self.data, train_mask=None, val_mask=None, **hyperparams)
-            preds.append(pred)
+            preds.append(pred.cpu().numpy())
+            scores.append(score)
             pt += time.time()-st
-        return sum(preds).max(1)[1].cpu().numpy().flatten()
+        return sum(map(lambda x: x[0]*x[1], zip(preds, softmax(np.array(scores))))).argmax(1)
 
     def hyper_optimization(self, params, train_mask, val_mask, trials=None):
         space = {
@@ -63,8 +66,9 @@ class AutoGCN:
                 },]
         def objective(hyperparams):
             model = GCN(**{**params, **hyperparams}).to(self.device)
-            pred = model.train_predict(self.data, train_mask, val_mask, **hyperparams).max(1)[1]
-            score = accuracy_score(self.data.y[val_mask].cpu().numpy(), pred.cpu().numpy())
+            pred = model.train_predict(self.data, train_mask, val_mask, **hyperparams)
+            score = accuracy_score(self.data.y[val_mask].cpu().numpy(), (pred.max(1)[1]).cpu().numpy())
+            #score = -F.nll_loss(pred, self.data.y[val_mask]).item()
             return {'loss': -score, 'status': STATUS_OK}
 
         trials = generate_trials_to_calculate(points)
@@ -72,8 +76,9 @@ class AutoGCN:
                     algo=tpe.suggest, max_evals=5, verbose=1,
                     )
         hyperparams = space_eval(space, best)
-        print('score: {:.4f}, hyperparams: {}'.format(-trials.best_trial['result']['loss'], hyperparams))
-        return hyperparams
+        best_score = -trials.best_trial['result']['loss']
+        print('score: {:.4f}, hyperparams: {}'.format(best_score, hyperparams))
+        return hyperparams, best_score
 
 class AutoGBDT:
     def __init__(self, data, start_time, time_budget, n_class):

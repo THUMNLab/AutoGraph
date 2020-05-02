@@ -37,6 +37,10 @@ def norm_z(x):
 def norm_max(x):
     return x/x.max(axis=0)
 
+def softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
+
 def train_val_split(train_ind, num_nodes, ratio=0.8, perm=True):
     if perm:
         train_ind = np.random.permutation(train_ind)

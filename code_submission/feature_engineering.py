@@ -65,8 +65,8 @@ class Feature_Engineering:
     @timeit
     def generate_feature(self, data):
         x = [
-                gbdt_gen(data, fixlen=2000),
-                #data.x,
+                #gbdt_gen(data, fixlen=2000),
+                data.x,
                 #self._get_ldp_feature(self.pyg_data),
                 #norm_z(self._get_mf_feature(data)),
                 scale(degree_gen(data))

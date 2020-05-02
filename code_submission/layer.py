@@ -19,7 +19,7 @@ class GCN(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         for i in range(num_layers - 1):
             self.convs.append(GCNConv(hidden, hidden))
-        self.lin2 = Linear(hidden, num_class)
+        self.lin2 = Linear(hidden*num_layers, num_class)
         self.first_lin = Linear(features_num, hidden)
         self.dropout = dropout
 
@@ -34,9 +34,12 @@ class GCN(torch.nn.Module):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_weight
         x = F.leaky_relu(self.first_lin(x))
         x = F.dropout(x, p=self.dropout, training=self.training)
+        xs = [x]
         for conv in self.convs:
             x = F.leaky_relu(conv(x, edge_index, edge_weight=edge_weight))
+            xs.append(x)
         #x = F.dropout(x, p=self.dropout, training=self.training)
+        x = torch.cat(xs, dim=1)
         x = self.lin2(x)
         return F.log_softmax(x, dim=-1)
 
@@ -60,6 +63,7 @@ class GCN(torch.nn.Module):
             
         test_mask = data.test_mask if val_mask is None else val_mask
         self.eval()
+        res = self.forward(data)
         with torch.no_grad():
             pred = res[test_mask]
         return pred
