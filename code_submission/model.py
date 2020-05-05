@@ -32,10 +32,10 @@ class Model:
         return data
 
     def train_predict(self, data, time_budget,n_class,schema):
-        self.fe = Feature_Engineering(data)
         self.time_budget = time_budget
         self.n_class = n_class
         self.schema = schema
+        self.fe = Feature_Engineering(data, self.start_time, time_budget)
 
         if self.model_name == 'AutoGCN':
             data = self.fe.generate_pyg_data()

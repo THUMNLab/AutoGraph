@@ -6,6 +6,7 @@ from scipy.sparse import csr_matrix
 import torch
 from torch_geometric.data import Data
 from collections import namedtuple
+import time
 
 from layer import LocalDegreeProfile, MatrixFactorization
 from utils import norm_minmax, norm_z, norm_max, setx, timeit
@@ -14,7 +15,9 @@ from gfe import gbdt_gen, scale, degree_gen, DeepGL
 Numpy_Data = namedtuple('Data', 'x num_nodes train_ind y test_ind edge_index edge_weight train_mask test_mask')
 
 class Feature_Engineering:
-    def __init__(self, data):
+    def __init__(self, data, start_time, time_budget):
+        self.start_time = start_time
+        self.time_budget = time_budget
         self.data = self.generate_data(data)
         self.num_nodes = self.data.x.shape[0]
         self.num_edges = self.data.edge_index.shape[0]
@@ -65,8 +68,8 @@ class Feature_Engineering:
     @timeit
     def generate_feature(self, data):
         x = [
-                #gbdt_gen(data, fixlen=2000),
-                data.x,
+                gbdt_gen(data, fixlen=2000),
+                #data.x,
                 #self._get_ldp_feature(self.pyg_data),
                 #norm_z(self._get_mf_feature(data)),
                 scale(degree_gen(data))
@@ -110,7 +113,8 @@ class Feature_Engineering:
         elif seclection_type == 'dgl':
             K = 200
             dgl = DeepGL(data)
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=gbdt_gen,timebudget=None)
+            remain_time = self.time_budget-(time.time()-self.start_time)
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=gbdt_gen,timebudget=remain_time/3)
             ### add
             data=setx(data,rx)
             rx=gbdt_gen(data,fixlen=2000)

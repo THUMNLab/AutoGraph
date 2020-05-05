@@ -6,7 +6,7 @@ log_file = $(log_dir)/logs_$(log_prefix).txt
 
 datasets = a b c d e
 dirs:=$(shell ls data/ )
-gpuid:=$(shell gpustat | awk '{if (NR>1) print NR-2, $$11}' | sort -k 2 | awk '{print $$1}' | sed -n '2p')
+gpuid:=$(shell gpustat | awk '{if (NR>1) print NR-2, $$11}' | sort -k 2 -n | awk '{print $$1}' | sed -n '1p')
 
 run:
 	python run_local_test.py --dataset_dir=data/$(dataset) --code_dir=code_submission

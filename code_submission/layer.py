@@ -3,7 +3,8 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from torch.nn import Linear
-from torch_geometric.nn import GCNConv, JumpingKnowledge, GATConv, Node2Vec, SGConv
+from torch_geometric.nn import GCNConv, JumpingKnowledge, GATConv, Node2Vec, SGConv, SAGEConv
+from torch.nn import BatchNorm1d
 from torch_geometric.data import Data
 from torch.utils.data import DataLoader
 from torch_geometric.utils import degree
@@ -13,15 +14,32 @@ import scipy.sparse as ssp
 import networkx as nx
 
 class GCN(torch.nn.Module):
-    def __init__(self, num_layers=2, hidden=16, dropout=0.5, features_num=16, num_class=2, **args):
+    def __init__(self, num_layers=2, hidden=16, dropout=0.5, features_num=16, num_class=2, agg='concat', withbn=True, act='leaky_relu', **args):
         super(GCN, self).__init__()
+        #GCNConv = SAGEConv
+        self.dropout = dropout
+        self.agg = agg
+        self.withbn = withbn
         self.conv1 = GCNConv(features_num, hidden)
         self.convs = torch.nn.ModuleList()
+        if self.withbn:
+            self.bn1 = BatchNorm1d(hidden)
+            self.bns = torch.nn.ModuleList()
         for i in range(num_layers - 1):
             self.convs.append(GCNConv(hidden, hidden))
-        self.lin2 = Linear(hidden*num_layers, num_class)
+            self.bns.append(BatchNorm1d(hidden))
+        if agg == 'concat':
+            outdim = hidden*num_layers
+        elif agg == 'add' or agg == 'self':
+            outdim = hidden
+        if act == 'leaky_relu':
+            self.act = F.leaky_relu
+        elif act == 'tanh':
+            self.act = torch.tanh
+        else:
+            self.act = lambda x: x
+        self.lin2 = Linear(outdim, num_class)
         self.first_lin = Linear(features_num, hidden)
-        self.dropout = dropout
 
     def reset_parameters(self):
         self.first_lin.reset_parameters()
@@ -33,17 +51,26 @@ class GCN(torch.nn.Module):
     def forward(self, data):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_weight
         x = F.leaky_relu(self.first_lin(x))
+        if self.withbn:
+            x = self.bn1(x)
         x = F.dropout(x, p=self.dropout, training=self.training)
         xs = [x]
-        for conv in self.convs:
-            x = F.leaky_relu(conv(x, edge_index, edge_weight=edge_weight))
+        for conv, bn in zip(self.convs, self.bns):
+            x = self.act(conv(x, edge_index, edge_weight=edge_weight))
+            if self.withbn:
+                x = bn(x)
             xs.append(x)
         #x = F.dropout(x, p=self.dropout, training=self.training)
-        x = torch.cat(xs, dim=1)
+        if self.agg == 'concat':
+            x = torch.cat(xs, dim=1)
+        elif self.agg == 'add':
+            x = sum(xs)
+        elif self.agg == 'self':
+            x = xs[-1]
         x = self.lin2(x)
         return F.log_softmax(x, dim=-1)
 
-    def train_predict(self, data, train_mask, val_mask=None, **hyperparams):
+    def train_predict(self, data, train_mask, val_mask=None, return_train=False, **hyperparams):
         """
             hyperparams:
                 lr
@@ -66,6 +93,8 @@ class GCN(torch.nn.Module):
         res = self.forward(data)
         with torch.no_grad():
             pred = res[test_mask]
+            if return_train:
+                pred = (pred, res[train_mask])
         return pred
  
     def __repr__(self):
