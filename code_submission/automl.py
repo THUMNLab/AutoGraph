@@ -46,7 +46,7 @@ class AutoGCN:
             scores.append(score)
             pt += time.time()-st
         scores = np.array(scores)
-        ind = np.where(scores>=max(scores)-0.05)[0]
+        ind = np.where(scores>=max(scores)-0.1)[0]
         preds = [preds[i] for i in ind]
         scores = scores[ind]
         print(scores)
@@ -58,8 +58,8 @@ class AutoGCN:
         st = time.time()
         space = {
                 'num_layers': hp.choice('num_layers', [1, 2]), 
-                'agg': hp.choice('agg', ['concat', 'add', 'self']),
-                'act': hp.choice('act', ['leaky_relu', 'tanh']),
+                #'agg': hp.choice('agg', ['concat', 'add', 'self']),
+                #'act': hp.choice('act', ['leaky_relu', 'tanh']),
                 'hidden': scope.int(hp.qloguniform('hidden', np.log(4), np.log(128), 1)),
                 'dropout': hp.uniform('dropout', 0.1, 0.9),
                 'lr': hp.loguniform('lr', np.log(0.001), np.log(0.5)),
@@ -68,8 +68,8 @@ class AutoGCN:
                 }
         points = [{
                 'num_layers': 1, #### warning!!!: 这里的1是上面hp.choice的数组下标。不是值。。
-                'agg': 0,
-                'act': 0,
+                #'agg': 0,
+                #'act': 0,
                 'hidden': 32,
                 'dropout': 0.5,
                 'lr': 0.025,
