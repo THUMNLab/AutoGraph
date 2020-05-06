@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
 import lightgbm as lgb
 
-from layer import GCN
+from layer import GCN, GAT
 from utils import train_val_split, softmax
 
 class AutoGCN:
@@ -19,7 +19,7 @@ class AutoGCN:
         self.n_class = n_class
         self.train_ind = train_ind
 
-    def fit(self):
+    def fit(self, rep_sign=False):
         params = {
                 'features_num': self.data.x.size()[1],
                 'num_class': self.n_class
@@ -41,10 +41,16 @@ class AutoGCN:
             hyperparams['epoches'] = 3*hyperparams['epoches']
 
             self.model = GCN(**{**params, **hyperparams}).to(self.device)
-            pred = self.model.train_predict(self.data, train_mask=None, val_mask=None, **hyperparams)
+            if rep_sign:
+                val_mask = np.ones(self.data.num_nodes)
+            else:
+                val_mask = None
+            pred = self.model.train_predict(self.data, train_mask=None, val_mask=val_mask, **hyperparams)
             preds.append(pred.cpu().numpy())
             scores.append(score)
             pt += time.time()-st
+        if rep_sign:
+            return sum(map(lambda x: x[0] * x[1], zip(preds, softmax(np.array(scores)))))
         return sum(map(lambda x: x[0]*x[1], zip(preds, softmax(np.array(scores))))).argmax(1)
 
     def hyper_optimization(self, params, train_mask, val_mask, trials=None):
@@ -79,6 +85,82 @@ class AutoGCN:
         best_score = -trials.best_trial['result']['loss']
         print('score: {:.4f}, hyperparams: {}'.format(best_score, hyperparams))
         return hyperparams, best_score
+
+class AutoGAT:
+    def __init__(self, data, device, start_time, time_budget, n_class, train_ind):
+        self.data = data.to(device)
+        self.device = device
+        self.start_time = start_time
+        self.time_budget = time_budget
+        self.n_class = n_class
+        self.train_ind = train_ind
+
+    def fit(self, rep_sign=False):
+        params = {
+                'features_num': self.data.x.size()[1],
+                'num_class': self.n_class
+                }
+        preds = []
+        scores = []
+        pt = 0
+        for i in range(5):
+            st = time.time()
+            remain_time = self.time_budget-(st-self.start_time)
+            print('remain time: {:.4f}s, per iter: {:.4f}s'.format(remain_time, pt/(i+1e-6)))
+            if 3*pt/(i+1e-6) > remain_time:
+                break
+            train_mask, val_mask = train_val_split(self.train_ind, self.data.num_nodes)
+            train_mask = train_mask.to(self.device)
+            val_mask = val_mask.to(self.device)
+
+            hyperparams, score = self.hyper_optimization(params, train_mask, val_mask)
+            hyperparams['epoches'] = 3*hyperparams['epoches']
+            self.model = GAT(**{**params, **hyperparams}).to(self.device)
+            if rep_sign:
+                val_mask = np.ones(self.data.num_nodes)
+            else:
+                val_mask = None
+            pred = self.model.train_predict(self.data, train_mask=None, val_mask=val_mask, **hyperparams)
+            preds.append(pred.cpu().numpy())
+            scores.append(score)
+            pt += time.time()-st
+        if rep_sign:
+            return sum(map(lambda x: x[0] * x[1], zip(preds, softmax(np.array(scores)))))
+        return sum(map(lambda x: x[0]*x[1], zip(preds, softmax(np.array(scores))))).argmax(1)
+
+    def hyper_optimization(self, params, train_mask, val_mask, trials=None):
+        space = {
+                #'num_layers': hp.choice('num_layers', [1, 2]),
+                #'hidden': scope.int(hp.qloguniform('hidden', np.log(4), np.log(128), 1)),
+                'dropout': hp.uniform('dropout', 0.1, 0.9),
+                'lr': hp.loguniform('lr', np.log(0.001), np.log(0.5)),
+                'epoches': scope.int(hp.quniform('epoches', 100, 200, 20)),
+                'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-2))
+                }
+        points = [{
+                #'num_layers': 1, #### warning!!!: 这里的1是上面hp.choice的数组下标。不是值。。
+                #'hidden': 32,
+                'dropout': 0.5,
+                'lr': 0.005,
+                'epoches': 200,
+                'weight_decay': 5e-4,
+                },]
+        def objective(hyperparams):
+            model = GAT(**{**params, **hyperparams}).to(self.device)
+            pred = model.train_predict(self.data, train_mask, val_mask, **hyperparams)
+            score = accuracy_score(self.data.y[val_mask].cpu().numpy(), (pred.max(1)[1]).cpu().numpy())
+            #score = -F.nll_loss(pred, self.data.y[val_mask]).item()
+            return {'loss': -score, 'status': STATUS_OK}
+
+        trials = generate_trials_to_calculate(points)
+        best = fmin(fn=objective, space=space, trials=trials,
+                    algo=tpe.suggest, max_evals=5, verbose=1,
+                    )
+        hyperparams = space_eval(space, best)
+        best_score = -trials.best_trial['result']['loss']
+        print('score: {:.4f}, hyperparams: {}'.format(best_score, hyperparams))
+        return hyperparams, best_score
+
 
 class AutoGBDT:
     def __init__(self, data, start_time, time_budget, n_class):
@@ -123,23 +205,36 @@ class AutoGBDT:
         space = {
             "learning_rate": hp.loguniform("learning_rate", np.log(0.001), np.log(0.1)),
             "max_depth": hp.choice("max_depth", [-1, 2, 3, 4]),
-            "num_leaves": hp.choice("num_leaves", np.linspace(10, 150, 50, dtype=int)),
+            "num_leaves": hp.choice("num_leaves", np.linspace(16, 32, 64, dtype=int)),
             "feature_fraction": hp.quniform("feature_fraction", 0.5, 1.0, 0.1),
             "bagging_fraction": hp.quniform("bagging_fraction", 0.5, 1.0, 0.1),
             "bagging_freq": hp.choice("bagging_freq", np.linspace(0, 50, 10, dtype=int)),
             "reg_alpha": hp.uniform("reg_alpha", 0, 2),
             "reg_lambda": hp.uniform("reg_lambda", 0, 2),
             "min_child_weight": hp.uniform('min_child_weight', 0.5, 10),
-            "num_iterations": scope.int(hp.quniform('num_iterations', 100, 200, 20))
+            "num_iterations": scope.int(hp.quniform('num_iterations', 100, 200, 20)),
+            #"subsample": hp.uniform("subsample", 0.5, 1),
+            #"colsample_bytree": hp.uniform("colsample_bytree", 0.5, 1),
             }
+        '''
+        points = [{
+            "num_leaves": 64,
+            "reg_alpha": 0.5,
+            "reg_lambda": 0.5,
+            "subsample" : 0.7,
+            "colsample_bytree" : 0.7,
+        },]
+        '''
+
         def objective(hyperparams):
-            model = lgb.train({**params, **hyperparams}, train_data, 50, valid_sets=val_data, early_stopping_rounds=30, verbose_eval=100)
+            model = lgb.train({**params, **hyperparams}, train_data, 20, valid_sets=val_data, early_stopping_rounds=30, verbose_eval=100)
             #score = model.best_score["valid_0"][params["metric"]]
             pred = model.predict(val_data.get_data(), num_iterations=model.best_iteration).argmax(1)
             score = accuracy_score(val_data.get_label() , pred)
 
             return {'loss': -score, 'status': STATUS_OK}
         trials = Trials()
+        #trials = generate_trials_to_calculate(points)
         best = fmin(fn=objective, space=space, trials=trials,
                     algo=tpe.suggest, max_evals=5, verbose=1,
                     )
