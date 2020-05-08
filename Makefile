@@ -32,3 +32,5 @@ total_all:
 	done
 docker:
 	docker run --gpus=0 -it --rm -v "$$(pwd):/app/autograph" -w /app/autograph -e NVIDIA_VISIBLE_DEVICES=$(gpuid) nehzux/kddcup2020:v2
+clean:
+	rm */.*.swp*

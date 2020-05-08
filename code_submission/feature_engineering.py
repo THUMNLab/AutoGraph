@@ -24,8 +24,10 @@ class Feature_Engineering:
         self.unweighted = np.all(self.data.edge_weight == 1.0)
         print('nodes: {}, edges: {}, unweighted graph: {}'.format(self.num_nodes, self.num_edges, self.unweighted))
 
+        has_feature = self.data.x.shape[1] > 2000
         self.data = setx(self.data, self.generate_feature(self.data))
-        self.data = setx(self.data, self.feature_selection(self.data))
+        if not has_feature:
+            self.data = setx(self.data, self.feature_selection(self.data))
 
     def generate_data(self, data):
         x = data['fea_table']
