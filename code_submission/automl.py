@@ -50,7 +50,7 @@ class AutoGCN:
             scores.append(score)
             pt += time.time()-st
         scores = np.array(scores)
-        ind = np.where(scores>=max(scores)-0.1)[0]
+        ind = np.where(scores>=max(scores)-0.05)[0]
         preds = [preds[i] for i in ind]
         scores = scores[ind]
         print(scores)
@@ -79,7 +79,7 @@ class AutoGCN:
                 #'act': 0,
                 'hidden': 32,
                 'dropout': 0.5,
-                'lr': 0.025,
+                'lr': 0.005,
                 'epoches': 200,
                 'weight_decay': 5e-3,
                 },]

@@ -27,10 +27,10 @@ class Model:
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         #select model : ['AutoGCN', 'AutoGBDT']
         #self.model_name = 'AutoGCN'
-        #self.model_name = 'AutoGAT'
+        self.model_name = 'AutoGAT'
         #self.model_name = 'AutoGBDT'
         #self.model_name = 'AutoGBM'
-        self.model_name = 'Ensemble'
+        #self.model_name = 'Ensemble'
     def generate_pyg_data(self):
         data = self.fe.pyg_data
         return data
