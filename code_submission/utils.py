@@ -3,6 +3,7 @@ import time
 import torch
 from typing import Any
 from functools import wraps
+from sklearn.model_selection import train_test_split
 
 nesting_level = 0
 
@@ -41,12 +42,8 @@ def softmax(x):
     e_x = np.exp(x - np.max(x))
     return e_x / e_x.sum()
 
-def train_val_split(train_ind, num_nodes, ratio=0.8, perm=True):
-    if perm:
-        train_ind = np.random.permutation(train_ind)
-    n_ind = int(train_ind.shape[0]*ratio)
-    val_ind = train_ind[n_ind:]
-    train_ind = train_ind[:n_ind]
+def train_val_split(train_ind, y, num_nodes, ratio=0.8, perm=True):
+    train_ind, val_ind, y_train, y_val = train_test_split(train_ind, y, test_size=1-ratio, shuffle=perm, stratify=y)
     train_mask = torch.zeros(num_nodes, dtype=torch.bool)
     train_mask[train_ind] = 1
     val_mask = torch.zeros(num_nodes, dtype=torch.bool)
