@@ -70,8 +70,8 @@ class Feature_Engineering:
     @timeit
     def generate_feature(self, data):
         x = [
-                #gbdt_gen(data, fixlen=2000),
-                data.x,
+                gbdt_gen(data, fixlen=2000),
+                #data.x,
                 scale(degree_gen(data))
                 ]
         if self.num_edges <= 1000000:
