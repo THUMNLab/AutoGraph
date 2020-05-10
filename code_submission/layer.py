@@ -9,14 +9,15 @@ from torch_geometric.data import Data
 from torch.utils.data import DataLoader
 from torch_geometric.utils import degree
 from torch_scatter import scatter_min, scatter_max, scatter_mean, scatter_std
+from sklearn.metrics import accuracy_score
 import numpy as np
 import scipy.sparse as ssp
 import networkx as nx
 
 class GCN(torch.nn.Module):
-    def __init__(self, num_layers=2, hidden=16, dropout=0.5, features_num=16, num_class=2, agg='concat', withbn=True, act='leaky_relu', **args):
+    def __init__(self, num_layers=2, hidden=16, hidden2=16, dropout=0.5, features_num=16, num_class=2, agg='concat', withbn=True, act='leaky_relu', **args):
         super(GCN, self).__init__()
-        #GCNConv = SAGEConv
+        self.args = args
         self.dropout = dropout
         self.agg = agg
         self.withbn = withbn
@@ -25,13 +26,15 @@ class GCN(torch.nn.Module):
         if self.withbn:
             self.bn1 = BatchNorm1d(hidden)
             self.bns = torch.nn.ModuleList()
+        hd = [hidden]
         for i in range(num_layers - 1):
-            self.convs.append(GCNConv(hidden, hidden))
-            self.bns.append(BatchNorm1d(hidden))
+            hd.append(hidden2)
+            self.convs.append(GCNConv(hidden, hidden2))
+            self.bns.append(BatchNorm1d(hidden2))
         if agg == 'concat':
-            outdim = hidden*num_layers
-        elif agg == 'add' or agg == 'self':
-            outdim = hidden
+            outdim = sum(hd)
+        elif agg == 'self':
+            outdim = hd[-1]
         if act == 'leaky_relu':
             self.act = F.leaky_relu
         elif act == 'tanh':
@@ -63,14 +66,12 @@ class GCN(torch.nn.Module):
         #x = F.dropout(x, p=self.dropout, training=self.training)
         if self.agg == 'concat':
             x = torch.cat(xs, dim=1)
-        elif self.agg == 'add':
-            x = sum(xs)
         elif self.agg == 'self':
             x = xs[-1]
         x = self.lin2(x)
         return F.log_softmax(x, dim=-1)
 
-    def train_predict(self, data, train_mask, val_mask=None, return_train=False, **hyperparams):
+    def train_predict(self, data, train_mask, val_mask=None, return_train=False, debug=False):
         """
             hyperparams:
                 lr
@@ -79,15 +80,15 @@ class GCN(torch.nn.Module):
         """
         if train_mask is None:
             train_mask = data.train_mask
-        optimizer = torch.optim.Adam(self.parameters(), lr=hyperparams['lr'], weight_decay=hyperparams['weight_decay'])
-        for epoch in range(1, hyperparams['epoches']):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.args['lr'], weight_decay=self.args['weight_decay'])
+        for epoch in range(1, self.args['epoches']):
             self.train()
             optimizer.zero_grad()
             res = self.forward(data)
             loss = F.nll_loss(res[train_mask], data.y[train_mask])
             loss.backward()
             optimizer.step()
-            
+
         test_mask = data.test_mask if val_mask is None else val_mask
         self.eval()
         res = self.forward(data)

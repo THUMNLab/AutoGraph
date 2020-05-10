@@ -1,4 +1,4 @@
-dataset = b
+dataset = a
 log_dir = logs
 log_prefix = gcn
 score_file = $(log_dir)/scores_$(log_prefix).txt

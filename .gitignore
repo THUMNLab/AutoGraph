@@ -1,6 +1,6 @@
 data/
 a.log
-.*.swp~
+.*.swp*
 logs/
 scoring_output/
 sample_result_submission/

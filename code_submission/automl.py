@@ -6,6 +6,7 @@ import time
 from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
 import lightgbm as lgb
+import copy
 
 from layer import GCN
 from utils import train_val_split, softmax
@@ -19,11 +20,31 @@ class AutoGCN:
         self.n_class = n_class
         self.train_ind = train_ind
 
-    def fit(self):
-        params = {
+        self.params = {
                 'features_num': self.data.x.size()[1],
-                'num_class': self.n_class
+                'num_class': self.n_class,
+                'epoches': 150,
+            }
+        self.space = {
+                'num_layers': scope.int(hp.choice('num_layers', [1, 2])),
+                'hidden': scope.int(hp.quniform('hidden', 4, 256, 1)),
+                'hidden2': scope.int(hp.quniform('hidden2', 4, 128, 1)),
+                'dropout': hp.uniform('dropout', 0.1, 0.9),
+                'lr': hp.loguniform('lr', np.log(0.001), np.log(0.5)),
+                #'epoches': scope.int(hp.quniform('epoches', 300, 300, 20)),
+                'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-2))
                 }
+        self.points = [{
+                'num_layers': 1, #### warning!!!: 这里的1是上面hp.choice的数组下标。不是值。。
+                'hidden': 128,
+                'hidden2': 32,
+                'dropout': 0.5,
+                'lr': 0.005,
+                'weight_decay': 5e-3,
+                },]
+
+
+    def fit(self):
         preds = []
         scores = []
         pt = 0
@@ -37,11 +58,12 @@ class AutoGCN:
             train_mask = train_mask.to(self.device)
             val_mask = val_mask.to(self.device)
 
-            hyperparams, score = self.hyper_optimization(params, train_mask, val_mask)
-            hyperparams['epoches'] = 2*hyperparams['epoches']
+            hyperparams, score = self.hyper_optimization(train_mask, val_mask)
+            params = copy.copy(self.params)
+            params['epoches'] *= 2
 
             self.model = GCN(**{**params, **hyperparams}).to(self.device)
-            pred = self.model.train_predict(self.data, train_mask=None, val_mask=None, return_train=False, **hyperparams)
+            pred = self.model.train_predict(self.data, train_mask=None, val_mask=None, return_train=False)
             preds.append(pred.cpu().numpy())
             scores.append(score)
             pt += time.time()-st
@@ -54,47 +76,27 @@ class AutoGCN:
         return res
 
 
-    def hyper_optimization(self, params, train_mask, val_mask, trials=None):
+    def hyper_optimization(self, train_mask, val_mask, trials=None):
         st = time.time()
-        space = {
-                'num_layers': hp.choice('num_layers', [1, 2]), 
-                #'agg': hp.choice('agg', ['concat', 'add', 'self']),
-                #'act': hp.choice('act', ['leaky_relu', 'tanh']),
-                'hidden': scope.int(hp.qloguniform('hidden', np.log(4), np.log(128), 1)),
-                'dropout': hp.uniform('dropout', 0.1, 0.9),
-                'lr': hp.loguniform('lr', np.log(0.001), np.log(0.5)),
-                'epoches': scope.int(hp.quniform('epoches', 100, 200, 20)),
-                'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-2))
-                }
-        points = [{
-                'num_layers': 1, #### warning!!!: 这里的1是上面hp.choice的数组下标。不是值。。
-                #'agg': 0,
-                #'act': 0,
-                'hidden': 32,
-                'dropout': 0.5,
-                'lr': 0.005,
-                'epoches': 200,
-                'weight_decay': 5e-3,
-                },]
         def objective(hyperparams):
-            model = GCN(**{**params, **hyperparams}).to(self.device)
-            pred, pred_train = model.train_predict(self.data, train_mask, val_mask, return_train=True, **hyperparams)
+            model = GCN(**{**self.params, **hyperparams}).to(self.device)
+            pred, pred_train = model.train_predict(self.data, train_mask, val_mask, return_train=True)
             score = accuracy_score(self.data.y[val_mask].cpu().numpy(), (pred.max(1)[1]).cpu().numpy())
             score_train = accuracy_score(self.data.y[train_mask].cpu().numpy(), (pred_train.max(1)[1]).cpu().numpy())
             #score = -F.nll_loss(pred, self.data.y[val_mask]).item()
             return {'loss': -score+0.1*(score_train-score), 'status': STATUS_OK, 'acc': [score_train, score]}
 
-        trials = generate_trials_to_calculate(points)
-        best = fmin(fn=objective, space=space, trials=trials,
+        trials = generate_trials_to_calculate(self.points)
+        best = fmin(fn=objective, space=self.space, trials=trials,
                     algo=tpe.suggest, max_evals=5, verbose=1,
                     )
         pt = time.time()-st
         remain_time = self.time_budget - (time.time()-self.start_time)
         if remain_time/pt > 6:
-            best = fmin(fn=objective, space=space, trials=trials,
+            best = fmin(fn=objective, space=self.space, trials=trials,
                     algo=tpe.suggest, max_evals=10, verbose=1,
                     )
-        hyperparams = space_eval(space, best)
+        hyperparams = space_eval(self.space, best)
         best_score = -trials.best_trial['result']['loss']
         acc = trials.best_trial['result']['acc']
         print('score: {:.4f}, acc: {:.2f} {:.2f}, hyperparams: {}'.format(best_score, acc[0], acc[1], hyperparams))
