@@ -101,6 +101,51 @@ class GCN(torch.nn.Module):
     def __repr__(self):
         return self.__class__.__name__
 
+
+class GAT(torch.nn.Module):
+    def __init__(self, features_num=16, num_class=2, dropout=0.5, **args):
+        super(GAT, self).__init__()
+        self.dropout = dropout
+        self.conv1 = GATConv(features_num, 8, heads=8, dropout=self.dropout)
+        self.conv2 = GATConv(8*8, num_class, dropout=self.dropout)
+
+    def forward(self, data):
+        x = data.x
+        #x = F.dropout(data.x, p=0.5, training=self.training)
+        x = F.elu(self.conv1(x, data.edge_index))
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.conv2(x, data.edge_index)
+        return F.log_softmax(x, dim=-1)
+
+    def train_predict(self, data, train_mask, val_mask=None, return_train=False, **hyperparams):
+        """
+            hyperparams:
+                lr
+                weight_decay
+                epoches
+        """
+        if train_mask is None:
+            train_mask = data.train_mask
+        optimizer = torch.optim.Adam(self.parameters(), lr=hyperparams['lr'], weight_decay=hyperparams['weight_decay'])
+        for epoch in range(1, hyperparams['epoches']):
+            self.train()
+            optimizer.zero_grad()
+            res = self.forward(data)
+            loss = F.nll_loss(res[train_mask], data.y[train_mask])
+            loss.backward()
+            optimizer.step()
+
+        test_mask = data.test_mask if val_mask is None else val_mask
+        self.eval()
+        res = self.forward(data)
+        with torch.no_grad():
+            pred = res[test_mask]
+            if return_train:
+                pred = (pred, res[train_mask])
+        return pred
+    def __repr__(self):
+        return self.__class__.__name__
+
 class LocalDegreeProfile(object):
     r"""Appends the Local Degree Profile (LDP) from the `"A Simple yet
     Effective Baseline for Non-attribute Graph Classification"

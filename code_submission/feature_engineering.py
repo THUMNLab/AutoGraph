@@ -24,6 +24,7 @@ class Feature_Engineering:
         self.unweighted = np.all(self.data.edge_weight == 1.0)
         print('nodes: {}, edges: {}, unweighted graph: {}'.format(self.num_nodes, self.num_edges, self.unweighted))
 
+        self.mf = None
         has_feature = self.data.x.shape[1] > 2000
         self.data = setx(self.data, self.generate_feature(self.data))
         if not has_feature:
@@ -75,7 +76,8 @@ class Feature_Engineering:
                 scale(degree_gen(data))
                 ]
         if self.num_edges <= 1000000:
-            x.append(norm_z(self._get_mf_feature(data)))
+            self.mf = self._get_mf_feature(data)
+            x.append(norm_z(self.mf))
         size = [i.shape[1] for i in x]
         print("feature generation: {}=({})".format(sum(size), '+'.join(map(str, size))))
         return np.hstack(x)
