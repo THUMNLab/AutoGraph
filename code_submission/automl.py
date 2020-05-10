@@ -27,8 +27,8 @@ class AutoGCN:
             }
         self.space = {
                 'num_layers': scope.int(hp.choice('num_layers', [1, 2])),
-                'hidden': scope.int(hp.quniform('hidden', 4, 256, 1)),
-                'hidden2': scope.int(hp.quniform('hidden2', 4, 128, 1)),
+                'hidden': scope.int(hp.quniform('hidden', 4, 128, 1)),
+                'hidden2': scope.int(hp.quniform('hidden2', 4, 64, 1)),
                 'dropout': hp.uniform('dropout', 0.1, 0.9),
                 'lr': hp.loguniform('lr', np.log(0.001), np.log(0.5)),
                 #'epoches': scope.int(hp.quniform('epoches', 300, 300, 20)),
@@ -36,7 +36,7 @@ class AutoGCN:
                 }
         self.points = [{
                 'num_layers': 1, #### warning!!!: 这里的1是上面hp.choice的数组下标。不是值。。
-                'hidden': 128,
+                'hidden': 64,
                 'hidden2': 32,
                 'dropout': 0.5,
                 'lr': 0.005,
