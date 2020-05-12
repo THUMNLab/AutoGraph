@@ -1,82 +1,27 @@
 AutoGraph
 ======================================
 
-## Contents
-ingestion/: The code and libraries used on Codalab to run your submmission.
+#### Results
 
-scoring/: The code and libraries used on Codalab to score your submmission.
-
-code_submission/: An example of code submission you can use as template.
-
-data/: Some sample data to test your code before you submit it.
-
-run_local_test.py: A python script to simulate the runtime in codalab
-
-## Local development and testing
-1. To make your own submission to AutoGraph challenge, you need to modify the
-file `model.py` in `code_submission/`, which implements your algorithm.
-2. Test the algorithm on your local computer using Docker,
-in the exact same environment as on the CodaLab challenge platform. Advanced
-users can also run local test without Docker, if they install all the required
-packages.
-3. If you are new to docker, install docker from https://docs.docker.com/get-started/.
-Then, at the shell, run:
-```
-cd path/to/autograph_starting_kit/
-docker run --gpus=0 -it --rm -v "$(pwd):/app/autograph" -w /app/autograph nehzux/kddcup2020:v2
-```
-The option `-v "$(pwd):/app/autograph"` mounts current directory
-(`autograph_starting_kit/`) as `/app/autograph`. If you want to mount other
-directories on your disk, please replace `$(pwd)` by your own directory.
-
-The Docker image
-```
-nehzux/kddcup2020:v2
-```
-
-4. You will then be able to run the `ingestion program` (to produce predictions)
-and the `scoring program` (to evaluate your predictions) on toy sample data.
-In the AutoGraph challenge, both two programs will run in parallel to give
-feedback. So we provide a Python script to simulate this behavior. To test locally, run:
-```
-python run_local_test.py
-```
-If the program exits without any errors, you can find the final score from the terminal's stdout of your solution.
-Also you can view the score by opening the `scoring_output/scores.txt`.
-
-The full usage is
-```
-python run_local_test.py --dataset_dir=./data/demo --code_dir=./code_submission
-```
-You can change the argument `dataset_dir` to other datasets (e.g. the two
-practice datasets we provide). On the other hand, you can also modify the directory containing your other sample code.
-
-## Download practice datasets
-We provide 3 practice datasets for participants. They can use these datasets to:
-1. Do local test for their own algorithm;
-2. Enable meta-learning.
-
-You may refer to [challenge site](https://www.automl.ai/competitions/3) for public datasets.
-
-Unzip the zip file and you'll get datasets.
-
-## Prepare a ZIP file for submission on CodaLab
-Zip the contents of `code_submission`(or any folder containing
-your `model.py` file) without the directory structure:
-```
-cd code_submission/
-zip -r mysubmission.zip *
-```
-then use the "Upload a Submission" button to make a submission to the
-competition page on challenge platform.
-
-Tip: to look at what's in your submission zip file without unzipping it, you
-can do
-```
-unzip -l mysubmission.zip
-```
-
-## Report bugs and create issues
-
-If you run into bugs or issues when using this starting kit, please please contact us via:
-<autograph2020@4paradigm.com>
+| dataset      | 好早之前的结果忘了    |  commit ee48549    | GCN    |GCN+Eigen|GAT    |GAT+Eigen|
+|--------------|-------------|----------------------------|--------|--------|--------|--------|
+|a             | 0.861728    | 0.8543                     | 0.8586 | 0.8580 | 0.8568 | 0.8599 |
+| amazon_cs    | 0.899229315 | 0.9092                     | 0.8807 | 0.9014 | 0.9117 | 0.9117 |
+| amazon_photo | 0.950104493 | 0.9493                     | 0.9365 | 0.9402 | 0.9459 | 0.9415 |
+| b            | 0.735072755 | 0.74                       | 0.7170 | 0.7180 | 0.7130 | 0.7110 |
+| c            | 0.910277871 | 0.9454                     | 0.8728 | 0.9150 | OOM    | OOM    |
+| citeseer     | 0.573934837 | 0.5184                     | 0.6194 | 0.6422 | 0.6519 | 0.6701 |
+| cora         | 0.75623053  | 0.74883                    | 0.7301 | 0.7535 | 0.7710 | 0.7683 |
+| d            | 0.936238    | 0.9362                     | 0.9369 | 0.9384 | OOM    | OOM    |
+| demo         | 0.873394495 | 0.8495                     | 0.8495 | 0.8624 | 0.8587 | 0.8679 |
+| e            | 0.884922395 | 0.8869                     | 0.6169 | 0.8836 | 0.5490 | 0.8822 |
+| ms_cs        | 0.917657324 | 0.9473                     | 0.9242 | 0.9330 | 0.9261 | 0.9255 |
+| ms_phy       | Timeout     | 0.96944                    | 0.9644 | 0.9654 | 0.9610 | 0.9610 |
+| pubmed       | 0.660121076 | 0.70382                    | 0.7410 | 0.7349 | 0.7620 | 0.7611 |
+| random0      | 0.999111111 | 1                          | 0.1342 | 0.1451 | 0.7909 | 0.8202 |
+| random0.25   | 0.767333333 | 0.762                      | 0.1304 | 0.1453 | 0.4053 | 0.4358 |
+| random0.5    | 0.516888889 | 0.5411                     | 0.1824 | 0.1953 | 0.4309 | 0.4342 |
+| random0.75   | 0.714222222 | 0.7468                     | 0.2700 | 0.3267 | 0.6880 | 0.6791 |
+| random1      | 0.999333333 | 0.9986                     | 0.4720 | 0.5216 | 0.9789 | 0.9720 |
+| random_neg   | Timeout     | Timeout(_get_mf_feature)   | 0.1010 | Timeout| 0.9220 | Timeout|
+| reddit       | Timeout     | Timeout(feature_selection) | Timeout| Timeout| Timeout| Timeout|
