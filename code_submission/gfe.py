@@ -566,58 +566,13 @@ class Timer:
         return False
 from functools import partial 
 
-
-### from torch_geometric
 from torch_geometric.nn import MessagePassing
-class MP(MessagePassing):
-    def __init__(self, aggr="sum", flow="source_to_target", node_dim=0):
-        super(MessagePassing, self).__init__()
-
-        self.aggr = aggr
-        assert self.aggr in ['sum', 'mean', 'max', 'min']
-
-        self.flow = flow
-        assert self.flow in ['source_to_target', 'target_to_source']
-
-        self.node_dim = node_dim
-        assert self.node_dim >= 0
-
-        self.__msg_aggr_params__ = inspect.signature(
-            self.message_and_aggregate).parameters
-        self.__msg_aggr_params__ = OrderedDict(self.__msg_aggr_params__)
-
-        self.__msg_params__ = inspect.signature(self.message).parameters
-        self.__msg_params__ = OrderedDict(self.__msg_params__)
-
-        self.__aggr_params__ = inspect.signature(self.aggregate).parameters
-        self.__aggr_params__ = OrderedDict(self.__aggr_params__)
-        self.__aggr_params__.popitem(last=False)
-
-        self.__update_params__ = inspect.signature(self.update).parameters
-        self.__update_params__ = OrderedDict(self.__update_params__)
-        self.__update_params__.popitem(last=False)
-
-        msg_aggr_args = set(
-            self.__msg_aggr_params__.keys()) - msg_aggr_special_args
-        msg_args = set(self.__msg_params__.keys()) - msg_special_args
-        aggr_args = set(self.__aggr_params__.keys()) - aggr_special_args
-        update_args = set(self.__update_params__.keys()) - update_special_args
-
-        self.__user_args__ = set().union(msg_aggr_args, msg_args, aggr_args,
-                                         update_args)
-
-        self.__fuse__ = True
-
-        # Support for GNNExplainer.
-        self.__explain__ = False
-        self.__edge_mask__ = None
-
 class dgl_op_gpu:
     def __init__(self,edge_index,aggr):
-        self._edge_index=torch.Tensor(edge_index).to(device)
-        self._mp=MP(aggr=aggr).to(device)
-    def __call__(self,x,**param):
-        return self._mp(edge_index,x=torch.Tensor(x).to(device)).cpu().numpy()
+        self._edge_index=torch.LongTensor(edge_index).to(device)
+        self._mp=MessagePassing(aggr=aggr).to(device)
+    def __call__(self,x,*param):
+        return self._mp.propagate(self._edge_index,x=torch.FloatTensor(x).to(device)).cpu().numpy()
         
 class DeepGL:
     r"""
@@ -639,8 +594,9 @@ class DeepGL:
         
         self._need=[i for i,nb in enumerate(self._neighbours) if len(nb)!=0]
 #         self._ops=[partial(dgl_op_para,func=partial(f,axis=0),need=self._need) for f in [np.sum,np.mean,np.max,np.min]]
-#         self._ops=[partial(dgl_op,func=f) for f in [np.sum,np.mean,np.max,np.min]]
-        self._ops=[dgl_op_gpu(self._edges,f) for f in 'sum mean max min'.split()]
+        self._ops=[partial(dgl_op,func=f) for f in [np.sum,np.mean,np.max,np.min]]
+#         self._ops1=[partial(dgl_op,func=f) for f in [np.sum,np.mean,np.max]]
+#         self._ops=[dgl_op_gpu(self._edges,f) for f in 'add mean max'.split()]
         self._sim=cos_sim
     @timeit
     def _gen(self,x):
