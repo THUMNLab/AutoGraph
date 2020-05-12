@@ -11,7 +11,7 @@ import time
 from layer import LocalDegreeProfile, MatrixFactorization
 from utils import norm_minmax, norm_z, norm_max, setx, timeit
 from gfe import gbdt_gen, scale, degree_gen, DeepGL
-
+from functools import partial
 Numpy_Data = namedtuple('Data', 'x num_nodes train_ind y test_ind edge_index edge_weight train_mask test_mask')
 
 class Feature_Engineering:
@@ -116,7 +116,7 @@ class Feature_Engineering:
             K = 200
             dgl = DeepGL(data)
             remain_time = self.time_budget-(time.time()-self.start_time)
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=gbdt_gen,timebudget=remain_time/3)
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=3),timebudget=remain_time/3)
             ### add
             data=setx(data,rx)
             rx=gbdt_gen(data,fixlen=2000)
