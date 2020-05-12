@@ -1,5 +1,5 @@
 import numpy as np
-from hyperopt import STATUS_OK, Trials, hp, space_eval, tpe, fmin
+from hyperopt import STATUS_OK, Trials, hp, space_eval, tpe, fmin, rand
 from hyperopt.fmin import generate_trials_to_calculate
 from hyperopt.pyll import scope
 import time
@@ -23,7 +23,7 @@ class AutoGCN:
         self.params = {
                 'features_num': self.data.x.size()[1],
                 'num_class': self.n_class,
-                'epoches': 150,
+                #'epoches': 150,
             }
         self.space = {
                 'num_layers': scope.int(hp.choice('num_layers', [1, 2])),
@@ -31,7 +31,7 @@ class AutoGCN:
                 'hidden2': scope.int(hp.quniform('hidden2', 4, 64, 1)),
                 'dropout': hp.uniform('dropout', 0.1, 0.9),
                 'lr': hp.loguniform('lr', np.log(0.001), np.log(0.5)),
-                #'epoches': scope.int(hp.quniform('epoches', 300, 300, 20)),
+                'epoches': scope.int(hp.quniform('epoches', 100, 200, 10)),
                 'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-2))
                 }
         self.points = [{
@@ -40,7 +40,8 @@ class AutoGCN:
                 'hidden2': 32,
                 'dropout': 0.5,
                 'lr': 0.005,
-                'weight_decay': 5e-3,
+                'epoches': 200,
+                'weight_decay': 5e-4,
                 },]
 
 
@@ -59,10 +60,10 @@ class AutoGCN:
             val_mask = val_mask.to(self.device)
 
             hyperparams, score = self.hyper_optimization(train_mask, val_mask)
-            params = copy.copy(self.params)
-            params['epoches'] *= 2
+            #params = copy.copy(self.params)
+            hyperparams['epoches'] *= 2
 
-            self.model = GCN(**{**params, **hyperparams}).to(self.device)
+            self.model = GCN(**{**self.params, **hyperparams}).to(self.device)
             if rep_sign:
                 val_mask = torch.BoolTensor(np.ones(self.data.num_nodes))
             else:
