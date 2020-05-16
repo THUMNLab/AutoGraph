@@ -65,7 +65,6 @@ class Feature_Engineering:
         y[train_ind] = train_y
         test_mask = np.zeros(num_nodes, dtype=bool)
         test_mask[test_ind] = True
-        
         return Numpy_Data(x=x, num_nodes=num_nodes, train_ind=train_ind, y=y, test_ind=test_ind, edge_index=edge_index, edge_weight=edge_weight, train_mask=train_mask, test_mask=test_mask)
 
     @timeit
@@ -116,7 +115,7 @@ class Feature_Engineering:
             K = 200
             dgl = DeepGL(data)
             remain_time = self.time_budget-(time.time()-self.start_time)
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=3),timebudget=remain_time/3)
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=100,early_stopping_rounds=5,is_val=True),timebudget=remain_time/3)
             ### add
             data=setx(data,rx)
             rx=gbdt_gen(data,fixlen=2000)

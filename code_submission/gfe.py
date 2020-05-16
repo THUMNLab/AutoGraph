@@ -359,28 +359,40 @@ def featuretools_gen(data):
     print(res)
     return res
 
-#os.system('pip install lightgbm')
 import lightgbm as lgb
+from sklearn.model_selection import train_test_split
 @timeit
 def gbdt_gen(data,fixlen=1000,params={
-        'verbosity':-1,
+        'verbosity':2,
         'random_state':47,
-    },**param_o):
+        'metric':['l2','auc'],
+#         'max_bin':63,
+        'save_binary':True
+#         'is_training_metric': True,
+#         'metric_freq': 1,
+    },is_val=True,train_val_ratio=0.2,**param_o):
     param={
-       'num_boost_round':3
+       'num_boost_round':100,
+        'early_stopping_rounds':5
     }
     param.update(param_o)
+    
     x=data.x[data.train_mask]
     _,num_feas = x.shape
     if num_feas < fixlen :
         return data.x
     label=data.y[data.train_mask]
     fnames=np.array(['f{}'.format(i) for i in range(num_feas)])
+    if is_val:
+        x_train,x_val,y_train,y_val=train_test_split(x,label,test_size=train_val_ratio,random_state=47)
+        dtrain=lgb.Dataset(x_train,label=y_train)
+        dval=lgb.Dataset(x_val,label=y_val)
+        clf=lgb.train(train_set=dtrain,params=params,valid_sets=dval,**param)
+    else:
+        train_x=pd.DataFrame(x,columns=fnames,index=None)
+        dtrain=lgb.Dataset(train_x,label=label)
+        clf=lgb.train(train_set=dtrain,params=params,**param)
     
-    train_x=pd.DataFrame(x,columns=fnames,index=None)
-    dtrain=lgb.Dataset(train_x,label=label)
-    
-    clf=lgb.train(train_set=dtrain,params=params,**param)
     imp=np.array(list(clf.feature_importance()))
 
     res=data.x[:,np.argsort(imp)[-fixlen:]]
