@@ -73,3 +73,28 @@ class EarlyStopping:
 
 def setx(data, x):
     return data._replace(x=x)
+
+def set_default(args, d):
+    for k, v in d.items():
+        if k not in args:
+            args[k] = v
+    return args
+
+class Timer:
+    def __init__(self, time_budget=0):
+        self.start_time = time.time()
+        self.time_budget = time_budget
+
+    def remain_time(self):
+        return self.time_budget-(time.time()-self.start_time)
+
+def label_distribution(y):
+    res = {}
+    for i in y:
+        if i not in res:
+            res[i] = 0
+        res[i]+= 1
+    t = sum(res.values())
+    for k, v in res.items():
+        res[k] = v*1.0/t
+    return res
