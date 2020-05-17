@@ -1,5 +1,4 @@
 import numpy as np
-from utils import Timer
 import pandas as pd
 from sklearn.feature_selection import SelectKBest, chi2, mutual_info_classif, f_classif
 from scipy.stats import pearsonr
@@ -14,6 +13,7 @@ import time
 
 from layer import LocalDegreeProfile, MatrixFactorization
 from utils import norm_minmax, norm_z, norm_max, setx, timeit, label_distribution
+from utils import Timer
 from gfe import gbdt_gen, scale, degree_gen, DeepGL
 from functools import partial
 Numpy_Data = namedtuple('Data', 'x num_nodes train_ind y test_ind edge_index edge_weight train_mask test_mask')
@@ -27,14 +27,10 @@ class Feature_Engineering:
         self.unweighted = np.all(self.data.edge_weight == 1.0)
         print('nodes: {}, edges: {}, unweighted graph: {}'.format(self.num_nodes, self.num_edges, self.unweighted))
 
-        self.mf = None
         has_feature = self.data.x.shape[1] > 2000
-        xs = self.generate_feature(self.data)
+        self.data = setx(self.data, self.generate_feature(self.data))
         if not has_feature:
-            self.data = setx(self.data, np.hstack(xs[1:]))
-            self.data = setx(self.data, np.hstack([xs[0], self.feature_selection(self.data)]))
-        else:
-            self.data = setx(self.data, np.hstack(xs))
+            self.data = setx(self.data, self.feature_selection(self.data))
         print('total feature: {}'.format(self.data.x.shape[1]))
 
     def generate_data(self, data):
@@ -76,19 +72,18 @@ class Feature_Engineering:
         return Numpy_Data(x=x, num_nodes=num_nodes, train_ind=train_ind, y=y, test_ind=test_ind, edge_index=edge_index, edge_weight=edge_weight, train_mask=train_mask, test_mask=test_mask)
 
     @timeit
-    def generate_feature(self, data, select=False):
-        x = []
-        if select:
-            x.append(gdbt_gen(data, fixlen=2000, num_boost_round=20))
-        else:
-            x.append(data.x)
-        x.append(scale(degree_gen(data)))
+    def generate_feature(self, data):
+        x = [
+                gbdt_gen(data, fixlen=2000),
+                #data.x,
+                scale(degree_gen(data))
+                ]
+
         if self.num_edges <= 1000000:
-            self.mf = self._get_mf_feature(data)
-            x.append(norm_z(self.mf))
+            x.append(norm_z(self._get_mf_feature(data)))
         size = [i.shape[1] for i in x]
         print("feature generation: {}=({})".format(sum(size), '+'.join(map(str, size))))
-        return x
+        return np.hstack(x)
 
     @timeit
     def _get_mf_feature(self, data, size=32):
@@ -121,7 +116,7 @@ class Feature_Engineering:
             K = 200
             dgl = DeepGL(data)
             remain_time = self.timer.remain_time()
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=5),timebudget=remain_time/3)
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=gbdt_gen, timebudget=remain_time/3)
             ### add
             data=setx(data,rx)
             rx=gbdt_gen(data,fixlen=2000)

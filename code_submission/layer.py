@@ -13,6 +13,7 @@ from torch_scatter import scatter_min, scatter_max, scatter_mean, scatter_std
 from sklearn.metrics import accuracy_score
 import numpy as np
 import scipy.sparse as ssp
+import pprint
 import networkx as nx
 
 from utils import set_default
@@ -36,7 +37,7 @@ class GCN(torch.nn.Module):
         self.dropout = self.args['dropout']
         self.agg = self.args['agg']
         self.withbn = self.args['withbn']
-        self.conv1 = GCNConv(self.args['features_num'], self.args['hidden'])
+        self.conv1 = GCNConv(self.args['hidden'], self.args['hidden'])
         self.convs = torch.nn.ModuleList()
         if self.withbn:
             self.bn1 = BatchNorm1d(self.args['hidden'])
@@ -57,6 +58,7 @@ class GCN(torch.nn.Module):
         else:
             self.act = lambda x: x
         self.lin2 = Linear(outdim, self.args['num_class'])
+        self.first_lin = Linear(self.args['features_num'], self.args['hidden'])
 
     def reset_parameters(self):
         self.conv1.reset_parameters()
@@ -66,9 +68,11 @@ class GCN(torch.nn.Module):
 
     def forward(self, data):
         x, edge_index, edge_weight = data.x, data.edge_index, data.edge_weight
-        x = self.act(self.conv1(x, edge_index, edge_weight=edge_weight))
+        #x = self.act(self.conv1(x, edge_index, edge_weight=edge_weight))
+        x = F.leaky_relu(self.first_lin(x))
         if self.withbn:
             x = self.bn1(x)
+        #x = self.act(self.conv1(x, edge_index, edge_weight=edge_weight))
         x = F.dropout(x, p=self.dropout, training=self.training)
         xs = [x]
         for conv, bn in zip(self.convs, self.bns):

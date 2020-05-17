@@ -30,7 +30,7 @@ class AutoGCN:
             }
         self.space = {
                 'num_layers': scope.int(hp.choice('num_layers', [1, 2])),
-                'agg': hp.choice('agg', ['concat', 'self']),
+                #'agg': hp.choice('agg', ['concat', 'self']),
                 'hidden': scope.int(hp.quniform('hidden', 4, 128, 1)),
                 'hidden2': scope.int(hp.quniform('hidden2', 4, 64, 1)),
                 'dropout': hp.uniform('dropout', 0.1, 0.9),
@@ -40,7 +40,7 @@ class AutoGCN:
                 }
         self.points = [{
                 'num_layers': 2,
-                'agg': 'concat',
+                #'agg': 'concat',
                 'hidden': 64,
                 'hidden2': 32,
                 'dropout': 0.5,

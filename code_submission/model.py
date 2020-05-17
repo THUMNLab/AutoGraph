@@ -3,10 +3,10 @@
 import numpy as np
 import pandas as pd
 import os, time
-import lightgbm as lgb
 import gc
 import traceback
 
+# a puzzle: importing lightgbm here will cost 30x times in gbdt_gen
 import torch
 
 from feature_engineering import Feature_Engineering
@@ -28,7 +28,7 @@ class Model:
     def __init__(self):
         self.timer = Timer()
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.models = ['AutoGCN', 'AutoSAGE', 'AutoGAT']
+        self.models = ['AutoGCN']
         self.model_mapping = {
                 'AutoGCN': AutoGCN,
                 'AutoGAT': AutoGAT,
