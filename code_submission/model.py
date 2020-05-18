@@ -3,12 +3,15 @@
 import numpy as np
 import pandas as pd
 import os, time
-import lightgbm as lgb
+import gc
+import traceback
 
+# a puzzle: importing lightgbm here will cost 30x times in gbdt_gen
 import torch
 
 from feature_engineering import Feature_Engineering
-from automl import AutoGCN, AutoGBDT, AutoGAT, AutoGBM
+from automl import AutoGCN, AutoGAT, AutoGBM, AutoSAGE, AutoGIN
+from utils import Timer, setx
 
 import random
 def fix_seed(seed):
@@ -23,55 +26,115 @@ fix_seed(1234)
 class Model:
 
     def __init__(self):
-        self.start_time = time.time()
+        self.timer = Timer()
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        #select model : ['AutoGCN', 'AutoGBDT']
-        #self.model_name = 'AutoGCN'
-        self.model_name = 'AutoGCN'
-        #self.model_name = 'AutoGBDT'
-        #self.model_name = 'AutoGBM'
-        #self.model_name = 'Ensemble'
-    def generate_pyg_data(self):
-        data = self.fe.pyg_data
-        return data
+        self.models = ['AutoGCN', 'AutoSAGE', 'AutoGAT']
+        self.model_mapping = {
+                'AutoGCN': AutoGCN,
+                'AutoGAT': AutoGAT,
+                'AutoSAGE': AutoSAGE,
+                'AutoGIN': AutoGIN,
+                'AutoGBM': AutoGBM,}
 
     def train_predict(self, data, time_budget,n_class,schema):
-        self.time_budget = time_budget
+        self.timer.time_budget = time_budget
         self.n_class = n_class
         self.schema = schema
-        self.fe = Feature_Engineering(data, self.start_time, time_budget)
+        self.fe = Feature_Engineering(data, self.timer)
 
-        if self.model_name == 'AutoGCN':
-            data = self.fe.generate_pyg_data()
-            model = AutoGCN(data, self.device, self.start_time, time_budget, self.n_class, self.fe.data.train_ind)
-        elif self.model_name == 'AutoGAT':
-            data = self.fe.generate_pyg_data()
-            model = AutoGAT(data, self.device, self.start_time, time_budget, self.n_class, self.fe.data.train_ind)
-        elif self.model_name == 'AutoGBDT':
-            data = self.fe.data
-            model = AutoGBDT(data, self.start_time, time_budget, self.n_class)
-        elif self.model_name == 'AutoGBM':
-            data = self.fe.data
-            model = AutoGBM(data, self.start_time, time_budget, self.n_class)
-        elif self.model_name == 'Ensemble':
-            data = self.fe.generate_pyg_data()
-            #model_gcn = AutoGCN(data, self.device, time.time(), time_budget/2, self.n_class, self.fe.data.train_ind)
-            #gcn_rep = model_gcn.fit(rep_sign=True)
-            model_gat = AutoGAT(data, self.device,  time.time(), time_budget*2/3, self.n_class, self.fe.data.train_ind)
-            gat_rep = model_gat.fit(rep_sign=True)
-            lightgbm = lgb.LGBMClassifier()
-            data = self.fe.data
-            #x = data.x
-            x = gat_rep
-            #x = np.concatenate((gcn_rep, gat_rep), axis=1)
-            if self.fe.mf.any():
-                x = np.concatenate((x, self.fe.mf), axis=1)
-            x_train = x[data.train_mask]
-            y_train = data.y[data.train_mask]
-            x_test = x[data.test_mask]
-            print("start gbm training: ")
-            lightgbm.fit(x_train, y_train)
-            return lightgbm.predict(x_test)
-        pred = model.fit()
+        stacking = False
+        n_round = 20
+        iter_num = 0
+        preds, scores, model_names = [], [], []
+        flag_end = False
+        black_lists = []
+        stack_pre_model = ['AutoGCN','AutoGAT', 'AutoSAGE', 'AutoGIN']
+        stack_after_model = ['AutoGBM']
+        if (not self.fe.unweighted) or self.fe.num_edges > 1000000:
+            black_lists.append('AutoGAT')
+        scores_model = dict(zip(self.models, [[] for _ in range(len(self.models))]))
+        for train_mask, val_mask in self.fe.split(n_round):
+            for i in range(1):
+                preds_all = []
+                scores_per_data = []
+                preds_per_data = []
+                model_names_per_data = []
+                for model_name in self.models:
+                    if model_name in black_lists:
+                        continue
+                    try:
+                        if stacking and (model_name in stack_after_model):
+                            x = self.fe.data.x
+                            self.fe.data = setx(self.fe.data, np.hstack(preds_all+[x]))
+                        data = self.fe.get_data(model_name)
+                        model_f = self.model_mapping[model_name]
+                        model = model_f(data, self.device, iter_num, self.timer, self.n_class)
+                        pred, score = model.fit(train_mask, val_mask)
+                        print("Round: {}-{}, model: {}, score: {:.4f}, remain_time: {:.2f}".format(iter_num, i, model_name, score, self.timer.remain_time()))
+                        flag_end = model.flag_end
+                        if model_name != 'AutoGBM':
+                            preds_all.append(pred)
+                            preds_per_data.append(pred[self.fe.data.test_mask])
+                        else:
+                            preds_per_data.append(pred)
+                        scores_per_data.append(score)
+                        model_names_per_data.append(model_name)
+                        scores_model[model_name].append(score)
+                        if stacking and (model_name in stack_after_model):
+                            self.fe.data = setx(self.fe.data, x)
+                    except Exception as e:
+                        print("Error!!!!!!!!!")
+                        print(e)
+                        traceback.print_exc()
+                        print("Add {} to black_lists".format(model_name))
+                        black_lists.append(model_name)
+                    if flag_end:
+                        if len(scores_per_data) > 0:
+                            ind = np.argmax(scores_per_data)
+                            scores.append(scores_per_data[ind])
+                            preds.append(preds_per_data[ind])
+                            model_names.append(model_names_per_data[ind])
+                        return self.get_results(preds, scores, model_names)
+                    gc.collect()
+                if len(scores_per_data) > 0:
+                    ind = np.argmax(scores_per_data)
+                    scores.append(scores_per_data[ind])
+                    preds.append(preds_per_data[ind])
+                    model_names.append(model_names_per_data[ind])
+                for k, v in scores_model.items():
+                    print("Score: {} {:.4f} {}".format(k, np.mean(v) if len(v) > 0 else 0.0, len(v)))
+                if len(model_names) >= 5:
+                    for model_name in self.models:
+                        if model_name not in model_names and model_name not in black_lists:
+                            print("Add {} to black_lists".format(model_name))
+                            black_lists.append(model_name)
+            iter_num += 1
+        return self.get_results(preds, scores, model_names)
 
-        return pred
+    def get_results(self, preds, scores, model_names):
+        ensemble_std_threshold = 1e-2
+
+        scores = np.array(scores)
+        ind = np.argsort(scores)[::-1]
+        scores = scores[ind]
+
+        num = 3
+        for i in range(len(scores), 3, -1):
+            std = np.std(scores[:i])
+            num = i
+            if std < ensemble_std_threshold:
+                break
+
+        num = min(10, num)
+        ind = ind[:num]
+        scores = scores[:num]
+        print(scores)
+        model_names = [model_names[i] for i in ind]
+        print(model_names)
+        scores = scores + 20*(scores - scores.mean())
+        scores = np.array([max(0.01, i) for i in scores])
+        scores = scores / scores.sum()
+        print(scores)
+        preds = [preds[i] for i in ind]
+        res = sum(map(lambda x: x[0] * x[1], zip(preds, scores)))
+        return res.argmax(1)

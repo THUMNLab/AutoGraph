@@ -497,39 +497,43 @@ def deepfm_gen(data,emb_size=100,epochs=200):
 
 
 verbose=0
-def dgl_op(x,nbs,func):
+def op_sum(x,nbs):
     res=np.zeros_like(x)
-    for u in range(len(nbs)):
+    for u in tqdm(range(len(nbs)),disable=not verbose):
         nb=nbs[u]
         if len(nb!=0):
-            res[u]=func(x[nb],axis=0)
+            res[u]=np.sum(x[nb],axis=0)
+    return res
+def op_mean(x,nbs):
+    res=np.zeros_like(x)
+    for u in tqdm(range(len(nbs)),disable=not verbose):
+        nb=nbs[u]
+        if len(nb!=0):
+            res[u]=np.mean(x[nb],axis=0)
+    return res
+def op_max(x,nbs):
+    res=np.zeros_like(x)
+    for u in tqdm(range(len(nbs)),disable=not verbose):
+        nb=nbs[u]
+        if len(nb!=0):
+            res[u]=np.max(x[nb],axis=0)
+    return res
+def op_min(x,nbs):
+    res=np.zeros_like(x)
+    for u in tqdm(range(len(nbs)),disable=not verbose):
+        nb=nbs[u]
+        if len(nb!=0):
+            res[u]=np.min(x[nb],axis=0)
+    return res
+def op_prod(x,nbs):
+    res=np.zeros_like(x)
+    for u in tqdm(range(len(nbs)),disable=not verbose):
+        nb=nbs[u]
+        if len(nb!=0):
+            res[u]=np.prod(x[nb],axis=0)
     return res
 
-# os.system('pip install numba')
-# import numba
-# from numba import njit,prange,jit
 
-from multiprocessing import Pool, Array, Lock
-from multiprocessing.pool import ThreadPool
-import os
-pool = ThreadPool(os.cpu_count())
-
-class Dgl_op:
-    def __init__(self,x,nbs,func,need):
-        self._func=func
-        self._x=x
-        self._nbs=nbs
-        self._res=np.zeros_like(x)
-        self._need=need
-    def _func_one(self,u):
-        self._res[u]=self._func(self._x[self._nbs[u]])
-        
-    def func_all(self):
-        pool.map(self._func_one,self._need)
-        return self._res
-def dgl_op_para(x,nbs,func,need):
-    return Dgl_op(x,nbs,func,need).func_all()
-   
 from sklearn.metrics.pairwise import cosine_similarity as cos_sim
 from sklearn import preprocessing
 def sim_y_sel(datax,datay,valve=0.05):
@@ -576,16 +580,6 @@ class Timer:
             if timebudget<self._esti_time:
                 return True
         return False
-from functools import partial 
-
-from torch_geometric.nn import MessagePassing
-class dgl_op_gpu:
-    def __init__(self,edge_index,aggr):
-        self._edge_index=torch.LongTensor(edge_index).to(device)
-        self._mp=MessagePassing(aggr=aggr).to(device)
-    def __call__(self,x,*param):
-        return self._mp.propagate(self._edge_index,x=torch.FloatTensor(x).to(device)).cpu().numpy()
-        
 class DeepGL:
     r"""
     reference to
@@ -603,20 +597,16 @@ class DeepGL:
         for u,v in self._edges:
             self._neighbours[u].append(v)
         self._neighbours=[np.array(v) for v in self._neighbours]
-        
-        self._need=[i for i,nb in enumerate(self._neighbours) if len(nb)!=0]
-#         self._ops=[partial(dgl_op_para,func=partial(f,axis=0),need=self._need) for f in [np.sum,np.mean,np.max,np.min]]
-        self._ops=[partial(dgl_op,func=f) for f in [np.sum,np.mean,np.max,np.min]]
-#         self._ops1=[partial(dgl_op,func=f) for f in [np.sum,np.mean,np.max]]
-#         self._ops=[dgl_op_gpu(self._edges,f) for f in 'add mean max'.split()]
+        self._ops=[op_sum,op_mean,op_max,op_min]
         self._sim=cos_sim
-    @timeit
+#     @timeit
     def _gen(self,x):
         res=[]
         for i,op in enumerate(self._ops):
             res.append(op(x,self._neighbours))
         res=np.concatenate(res,axis=1)
         return res
+    
 #     @timeit
     def _sel(self,x,valve=0.1):
         x=x.T
