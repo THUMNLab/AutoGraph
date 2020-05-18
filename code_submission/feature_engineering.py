@@ -73,7 +73,7 @@ class Feature_Engineering:
     @timeit
     def generate_feature(self, data):
         x = [
-                gbdt_gen(data, fixlen=2000),
+                gbdt_gen(data, fixlen=2000, early_stopping_rounds=20, num_boost_round=20),
                 #data.x,
                 scale(degree_gen(data))
                 ]
@@ -114,8 +114,8 @@ class Feature_Engineering:
         elif seclection_type == 'dgl':
             K = 200
             dgl = DeepGL(data)
-            remain_time = self.time_budget-(time.time()-self.start_time)
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=100,early_stopping_rounds=5,is_val=True),timebudget=remain_time/3)
+            remain_time = self.timer.remain_time()
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=10,early_stopping_rounds=10,is_val=True),timebudget=remain_time/3)
             ### add
             data=setx(data,rx)
             rx=gbdt_gen(data,fixlen=2000)

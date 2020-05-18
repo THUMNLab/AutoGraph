@@ -238,6 +238,8 @@ class AutoGBM:
             'subsample': 0.9,
             'subsample_freq': 1,
             'n_jobs': 10,
+            'objective': 'multiclass',
+            'num_class': n_class
         }
         self.space = {
             'learning_rate': hp.loguniform('learning_rate', np.log(0.01), np.log(0.1)),

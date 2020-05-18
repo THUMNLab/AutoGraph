@@ -28,7 +28,7 @@ class Model:
     def __init__(self):
         self.timer = Timer()
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.models = ['AutoGCN', 'AutoSAGE', 'AutoGAT']
+        self.models = ['AutoGCN']
         self.model_mapping = {
                 'AutoGCN': AutoGCN,
                 'AutoGAT': AutoGAT,

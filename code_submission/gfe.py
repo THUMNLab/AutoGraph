@@ -361,16 +361,31 @@ def featuretools_gen(data):
 
 import lightgbm as lgb
 from sklearn.model_selection import train_test_split
+import psutil
 @timeit
 def gbdt_gen(data,fixlen=1000,params={
-        'verbosity':2,
+        'boosting_type': 'gbdt',
+        'verbosity':-1,
         'random_state':47,
-        'metric':['l2','auc'],
-#         'max_bin':63,
-        'save_binary':True
+        'objective': 'multiclass',
+        'metric':['multi_logloss'],
+        'max_bin':63,
+        'save_binary':True,
+        'num_threads': 20,
+        'num_leaves': 16,
+        'subsample': 0.9,
+        'subsample_freq': 1,
+        'colsample_bytree': 0.8,
 #         'is_training_metric': True,
 #         'metric_freq': 1,
     },is_val=True,train_val_ratio=0.2,**param_o):
+
+    n_class = np.max(data.y)+1
+    params['num_class'] = n_class
+    cpu_count = psutil.cpu_count()
+    print("CPU core: {}".format(cpu_count))
+    params['num_threads'] = cpu_count if data.train_ind.shape[0] > 10000 else min(32, cpu_count)
+
     param={
        'num_boost_round':100,
         'early_stopping_rounds':5
@@ -383,6 +398,8 @@ def gbdt_gen(data,fixlen=1000,params={
         return data.x
     label=data.y[data.train_mask]
     fnames=np.array(['f{}'.format(i) for i in range(num_feas)])
+
+
     if is_val:
         x_train,x_val,y_train,y_val=train_test_split(x,label,test_size=train_val_ratio,random_state=47)
         dtrain=lgb.Dataset(x_train,label=y_train)
@@ -599,7 +616,7 @@ class DeepGL:
         self._neighbours=[np.array(v) for v in self._neighbours]
         self._ops=[op_sum,op_mean,op_max,op_min]
         self._sim=cos_sim
-#     @timeit
+    @timeit
     def _gen(self,x):
         res=[]
         for i,op in enumerate(self._ops):
@@ -607,7 +624,7 @@ class DeepGL:
         res=np.concatenate(res,axis=1)
         return res
     
-#     @timeit
+    @timeit
     def _sel(self,x,valve=0.1):
         x=x.T
         sims=np.abs(self._sim(x,x))
