@@ -28,7 +28,7 @@ class Model:
     def __init__(self):
         self.timer = Timer()
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.models = ['AutoGCN']
+        self.models = ['AutoGCN', 'AutoSAGE', 'AutoGAT']
         self.model_mapping = {
                 'AutoGCN': AutoGCN,
                 'AutoGAT': AutoGAT,
@@ -56,6 +56,9 @@ class Model:
         for train_mask, val_mask in self.fe.split(n_round):
             for i in range(1):
                 preds_all = []
+                scores_per_data = []
+                preds_per_data = []
+                model_names_per_data = []
                 for model_name in self.models:
                     if model_name in black_lists:
                         continue
@@ -71,11 +74,11 @@ class Model:
                         flag_end = model.flag_end
                         if model_name != 'AutoGBM':
                             preds_all.append(pred)
-                            preds.append(pred[self.fe.data.test_mask])
+                            preds_per_data.append(pred[self.fe.data.test_mask])
                         else:
-                            preds.append(pred)
-                        scores.append(score)
-                        model_names.append(model_name)
+                            preds_per_data.append(pred)
+                        scores_per_data.append(score)
+                        model_names_per_data.append(model_name)
                         scores_model[model_name].append(score)
                         if stacking and (model_name in stack_after_model):
                             self.fe.data = setx(self.fe.data, x)
@@ -83,12 +86,28 @@ class Model:
                         print("Error!!!!!!!!!")
                         print(e)
                         traceback.print_exc()
+                        print("Add {} to black_lists".format(model_name))
                         black_lists.append(model_name)
                     if flag_end:
+                        if len(scores_per_data) > 0:
+                            ind = np.argmax(scores_per_data)
+                            scores.append(scores_per_data[ind])
+                            preds.append(preds_per_data[ind])
+                            model_names.append(model_names_per_data[ind])
                         return self.get_results(preds, scores, model_names)
                     gc.collect()
+                if len(scores_per_data) > 0:
+                    ind = np.argmax(scores_per_data)
+                    scores.append(scores_per_data[ind])
+                    preds.append(preds_per_data[ind])
+                    model_names.append(model_names_per_data[ind])
                 for k, v in scores_model.items():
                     print("Score: {} {:.4f} {}".format(k, np.mean(v) if len(v) > 0 else 0.0, len(v)))
+                if len(model_names) >= 5:
+                    for model_name in self.models:
+                        if model_name not in model_names and model_name not in black_lists:
+                            print("Add {} to black_lists".format(model_name))
+                            black_lists.append(model_name)
             iter_num += 1
         return self.get_results(preds, scores, model_names)
 
