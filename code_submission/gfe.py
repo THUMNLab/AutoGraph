@@ -383,7 +383,7 @@ def gbdt_gen(data,fixlen=1000,params={
     n_class = np.max(data.y)+1
     params['num_class'] = n_class
     cpu_count = psutil.cpu_count()
-    print("CPU core: {}".format(cpu_count))
+    #print("CPU core: {}".format(cpu_count))
     params['num_threads'] = cpu_count if data.train_ind.shape[0] > 10000 else min(32, cpu_count)
 
     param={
@@ -401,7 +401,7 @@ def gbdt_gen(data,fixlen=1000,params={
 
 
     if is_val:
-        x_train,x_val,y_train,y_val=train_test_split(x,label,test_size=train_val_ratio,random_state=47)
+        x_train,x_val,y_train,y_val=train_test_split(x,label,test_size=train_val_ratio,stratify=label,random_state=47)
         dtrain=lgb.Dataset(x_train,label=y_train)
         dval=lgb.Dataset(x_val,label=y_val)
         clf=lgb.train(train_set=dtrain,params=params,valid_sets=dval,**param)

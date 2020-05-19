@@ -72,16 +72,17 @@ class Model:
                         pred, score = model.fit(train_mask, val_mask)
                         print("Round: {}-{}, model: {}, score: {:.4f}, remain_time: {:.2f}".format(iter_num, i, model_name, score, self.timer.remain_time()))
                         flag_end = model.flag_end
-                        if model_name != 'AutoGBM':
-                            preds_all.append(pred)
-                            preds_per_data.append(pred[self.fe.data.test_mask])
-                        else:
-                            preds_per_data.append(pred)
-                        scores_per_data.append(score)
-                        model_names_per_data.append(model_name)
-                        scores_model[model_name].append(score)
-                        if stacking and (model_name in stack_after_model):
-                            self.fe.data = setx(self.fe.data, x)
+                        if score > 0:
+                            if model_name != 'AutoGBM':
+                                preds_all.append(pred)
+                                preds_per_data.append(pred[self.fe.data.test_mask])
+                            else:
+                                preds_per_data.append(pred)
+                            scores_per_data.append(score)
+                            model_names_per_data.append(model_name)
+                            scores_model[model_name].append(score)
+                            if stacking and (model_name in stack_after_model):
+                                self.fe.data = setx(self.fe.data, x)
                     except Exception as e:
                         print("Error!!!!!!!!!")
                         print(e)
@@ -119,7 +120,7 @@ class Model:
         scores = scores[ind]
 
         num = 3
-        for i in range(len(scores), 3, -1):
+        for i in range(len(scores), num, -1):
             std = np.std(scores[:i])
             num = i
             if std < ensemble_std_threshold:

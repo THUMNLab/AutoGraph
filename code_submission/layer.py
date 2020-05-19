@@ -44,8 +44,8 @@ class GCN(torch.nn.Module):
             self.bns = torch.nn.ModuleList()
         hd = [self.args['hidden']]
         for i in range(self.args['num_layers'] - 1):
+            self.convs.append(GCNConv(hd[-1], self.args['hidden2']))
             hd.append(self.args['hidden2'])
-            self.convs.append(GCNConv(self.args['hidden'], self.args['hidden2']))
             self.bns.append(BatchNorm1d(self.args['hidden2']))
         if self.args['agg'] == 'concat':
             outdim = sum(hd)
