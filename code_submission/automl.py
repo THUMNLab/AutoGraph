@@ -29,14 +29,14 @@ class AutoGCN:
                 #'epoches': 150,
             }
         self.space = {
-                'num_layers': scope.int(hp.choice('num_layers', [1, 2, 3])),
+                'num_layers': scope.int(hp.choice('num_layers', [1, 2])),
                 #'agg': hp.choice('agg', ['concat', 'self']),
                 'hidden': scope.int(hp.quniform('hidden', 8, 128, 4)),
                 'hidden2': scope.int(hp.quniform('hidden2', 8, 64, 4)),
                 'dropout': hp.uniform('dropout', 0.1, 0.9),
                 'lr': hp.loguniform('lr', np.log(0.001), np.log(1.0)),
-                'epoches': scope.int(hp.quniform('epoches', 100, 300, 10)),
-                'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-2))
+                'epoches': scope.int(hp.quniform('epoches', 100, 200, 10)),
+                'weight_decay': hp.loguniform('weight_decay', np.log(1e-4), np.log(1e-1))
                 }
         self.points = [{
                 'num_layers': 1,
@@ -44,7 +44,7 @@ class AutoGCN:
                 'hidden': 64,
                 'hidden2': 32,
                 'dropout': 0.5,
-                'lr': 0.005,
+                'lr': 0.05,
                 'epoches': 200,
                 'weight_decay': 5e-3,
                 },]
@@ -66,8 +66,14 @@ class AutoGCN:
         score = accuracy_score(self.data.y[val_mask].cpu().numpy(), (pred_val.max(1)[1]).cpu().numpy())
         return pred.cpu().numpy(), score
         """
-        pred, score = self.hyper_optimization(train_mask, val_mask)
-        return pred, score
+        pred, score, hyperparams = self.hyper_optimization(train_mask, val_mask)
+        hyperparams['epoches'] *= 2
+        model  = GCN({**self.params, **hyperparams, 'timer': self.timer}).to(self.device)
+        pred, flag = model.train_predict(self.data, train_mask=self.data.train_mask, val_mask=None)
+        if flag:
+            self.flag_end = True
+
+        return pred.cpu().numpy(), score
 
     def hyper_optimization(self, train_mask, val_mask):
         def objective(hyperparams):
@@ -89,7 +95,7 @@ class AutoGCN:
         pprint.pprint(hyperparams, width=1)
         print('>>>>>>> ', best_score)
         pred = trials.best_trial['result']['pred']
-        return pred, best_score
+        return pred, best_score, hyperparams
 
 class AutoGAT:
     def __init__(self, data, device, iter_num, timer, n_class, **args):

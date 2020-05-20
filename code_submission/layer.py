@@ -15,6 +15,7 @@ import numpy as np
 import scipy.sparse as ssp
 import pprint
 import networkx as nx
+from torch.optim.lr_scheduler import StepLR
 
 from utils import set_default
 
@@ -92,6 +93,7 @@ class GCN(torch.nn.Module):
         if train_mask is None:
             train_mask = data.train_mask
         optimizer = torch.optim.Adam(self.parameters(), lr=self.args['lr'], weight_decay=self.args['weight_decay'])
+        scheduler = StepLR(optimizer, step_size=50, gamma=0.2)
         flag_end = False
         st = time.time()
         for epoch in range(1, self.args['epoches']):
@@ -101,6 +103,7 @@ class GCN(torch.nn.Module):
             loss = F.nll_loss(res[train_mask], data.y[train_mask])
             loss.backward()
             optimizer.step()
+            scheduler.step()
             if epoch%50 == 0:
                 cost = (time.time()-st)/epoch*50
                 if max(cost*10, 5) > self.timer.remain_time():

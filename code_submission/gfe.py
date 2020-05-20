@@ -388,7 +388,7 @@ def gbdt_gen(data,fixlen=1000,params={
 
     param={
        'num_boost_round':100,
-        'early_stopping_rounds':5
+        'early_stopping_rounds':5,
     }
     param.update(param_o)
     
@@ -398,7 +398,6 @@ def gbdt_gen(data,fixlen=1000,params={
         return data.x
     label=data.y[data.train_mask]
     fnames=np.array(['f{}'.format(i) for i in range(num_feas)])
-
 
     if is_val:
         x_train,x_val,y_train,y_val=train_test_split(x,label,test_size=train_val_ratio,stratify=label,random_state=47)
