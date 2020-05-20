@@ -73,7 +73,7 @@ class Feature_Engineering:
     @timeit
     def generate_feature(self, data):
         x = [
-                gbdt_gen(data, fixlen=2000, early_stopping_rounds=10, num_boost_round=50),
+                gbdt_gen(data, fixlen=2000, early_stopping_rounds=10, num_boost_round=100),
                 #data.x,
                 scale(degree_gen(data))
                 ]

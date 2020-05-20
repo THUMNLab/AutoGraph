@@ -47,7 +47,8 @@ class GCN(torch.nn.Module):
         for i in range(self.args['num_layers'] - 1):
             self.convs.append(GCNConv(hd[-1], self.args['hidden2']))
             hd.append(self.args['hidden2'])
-            self.bns.append(BatchNorm1d(self.args['hidden2']))
+            if self.withbn:
+                self.bns.append(BatchNorm1d(self.args['hidden2']))
         if self.args['agg'] == 'concat':
             outdim = sum(hd)
         elif self.args['agg'] == 'self':
@@ -76,12 +77,14 @@ class GCN(torch.nn.Module):
         #x = self.act(self.conv1(x, edge_index, edge_weight=edge_weight))
         x = F.dropout(x, p=self.dropout, training=self.training)
         xs = [x]
-        for conv, bn in zip(self.convs, self.bns):
+        for i in range(len(self.convs)):
+            conv = self.convs[i]
             x = self.act(conv(x, edge_index, edge_weight=edge_weight))
             if self.withbn:
+                bn = self.bns[i]
                 x = bn(x)
             xs.append(x)
-        #x = F.dropout(x, p=self.dropout, training=self.training)
+        x = F.dropout(x, p=self.dropout, training=self.training)
         if self.agg == 'concat':
             x = torch.cat(xs, dim=1)
         elif self.agg == 'self':
