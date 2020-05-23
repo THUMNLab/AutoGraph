@@ -26,8 +26,11 @@ class Feature_Engineering:
         self.num_edges = self.data.edge_index.shape[0]
         self.unweighted = np.all(self.data.edge_weight == 1.0)
         print('nodes: {}, edges: {}, unweighted graph: {}'.format(self.num_nodes, self.num_edges, self.unweighted))
+        self.max_feature_num = 3000
 
-        has_feature = self.data.x.shape[1] > 2000
+        print('origin feature: {}'.format(self.data.x.shape[1]))
+
+        has_feature = self.data.x.shape[1] > self.max_feature_num
         self.data = setx(self.data, self.generate_feature(self.data))
         if not has_feature:
             self.data = setx(self.data, self.feature_selection(self.data))
@@ -71,9 +74,9 @@ class Feature_Engineering:
         return Numpy_Data(x=x, num_nodes=num_nodes, train_ind=train_ind, y=y, test_ind=test_ind, edge_index=edge_index, edge_weight=edge_weight, train_mask=train_mask, test_mask=test_mask)
 
     @timeit
-    def generate_feature(self, data):
+    def generate_feature(self, data, stack=True):
         x = [
-                gbdt_gen(data, fixlen=2000, early_stopping_rounds=10, num_boost_round=100),
+                gbdt_gen(data, fixlen=self.max_feature_num, early_stopping_rounds=10, num_boost_round=100),
                 #data.x,
                 scale(degree_gen(data))
                 ]
@@ -82,7 +85,10 @@ class Feature_Engineering:
             x.append(norm_z(self._get_mf_feature(data)))
         size = [i.shape[1] for i in x]
         print("feature generation: {}=({})".format(sum(size), '+'.join(map(str, size))))
-        return np.hstack(x)
+        if stack:
+            return np.hstack(x)
+        else:
+            return x
 
     @timeit
     def _get_mf_feature(self, data, size=32):
@@ -115,10 +121,10 @@ class Feature_Engineering:
             K = 200
             dgl = DeepGL(data)
             remain_time = self.timer.remain_time()
-            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=50,early_stopping_rounds=10,is_val=True),timebudget=remain_time/3)
+            rx = dgl.gen(max_epoch=5, fixlen=K, y_sel_func=partial(gbdt_gen,num_boost_round=100,early_stopping_rounds=10,is_val=True),timebudget=remain_time/3)
             ### add
             data=setx(data,rx)
-            rx=gbdt_gen(data,fixlen=2000)
+            rx=gbdt_gen(data,fixlen=self.max_feature_num)
             ### 
         print('after selection, feature: {}->{}'.format(data.x.shape[1], rx.shape[1]))
         return rx

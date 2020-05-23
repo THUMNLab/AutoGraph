@@ -67,6 +67,8 @@ class AutoGCN:
         return pred.cpu().numpy(), score
         """
         pred, score, hyperparams = self.hyper_optimization(train_mask, val_mask)
+        if hyperparams is None:
+            return None, score
         hyperparams['epoches'] *= 2
         model  = GCN({**self.params, **hyperparams, 'timer': self.timer}).to(self.device)
         pred, flag = model.train_predict(self.data, train_mask=self.data.train_mask, val_mask=None)
@@ -86,7 +88,7 @@ class AutoGCN:
         trials = generate_trials_to_calculate(self.points)
         if self.timer.remain_time() < 5 or self.flag_end:
             self.flag_end = True
-            return None, -1.0
+            return None, -1.0, None
         best = fmin(fn=objective, space=self.space, trials=trials,
                 algo=tpe.suggest, max_evals=5, verbose=0,
                 timeout=self.timer.remain_time()-5)

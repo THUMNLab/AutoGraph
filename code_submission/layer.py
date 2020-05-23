@@ -96,7 +96,7 @@ class GCN(torch.nn.Module):
         if train_mask is None:
             train_mask = data.train_mask
         optimizer = torch.optim.Adam(self.parameters(), lr=self.args['lr'], weight_decay=self.args['weight_decay'])
-        scheduler = StepLR(optimizer, step_size=50, gamma=0.2)
+        scheduler = StepLR(optimizer, step_size=100, gamma=0.1)
         flag_end = False
         st = time.time()
         for epoch in range(1, self.args['epoches']):
