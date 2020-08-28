@@ -1,6 +1,6 @@
 ### KDD Cup 2020 AutoGraph Challenge
 
-This is the final code submission of SmartMN-THU.
+This is the final code submission of SmartMN-THU, which won the 6th place in KDD Cup 2020 AutoGraph Challenge.
 
 #### Authors
 - Ke Tu
